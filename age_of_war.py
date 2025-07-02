@@ -1,133 +1,138 @@
 from itertools import permutations
 
-
 class Platoon:
-    """
-     group of soldiers of the same class.
-    """
-
-    ADVANTAGE_MAP = {
+    """A group of soldiers of the same type."""
+    
+    # What beats what
+    beats = {
         "Militia": ["Spearmen", "LightCavalry"],
-        "Spearmen": ["LightCavalry", "HeavyCavalry"],
+        "Spearmen": ["LightCavalry", "HeavyCavalry"], 
         "LightCavalry": ["FootArcher", "CavalryArcher"],
         "HeavyCavalry": ["Militia", "FootArcher", "LightCavalry"],
         "CavalryArcher": ["Spearmen", "HeavyCavalry"],
         "FootArcher": ["Militia", "CavalryArcher"],
     }
-
-    def __init__(self, unit_class, size):
-        self.unit_class = unit_class
-        self.size = size
-
-    def has_advantage_over(self, enemy):
-        """
-        Checks if this platoon has an advantage over the enemy platoon.
-        """
-        return enemy.unit_class in self.ADVANTAGE_MAP.get(self.unit_class, [])
-
-    def effective_strength_against(self, enemy):
-        """
-        Returns the effective fighting strength of this platoon against the enemy platoon.
-        """
-        multiplier = 2 if self.has_advantage_over(enemy) else 1
-        return self.size * multiplier
-
-    def battle_outcome(self, enemy):
-        """
-        Determines the battle outcome: win, draw or lose.
-        """
-        my_strength = self.effective_strength_against(enemy)
-        if my_strength > enemy.size:
+    
+    def __init__(self, type, count):
+        self.type = type
+        self.count = count
+    
+    def can_beat(self, other):
+        """Check if we beat the other guy"""
+        return other.type in self.beats.get(self.type, [])
+    
+    def power_vs(self, other):
+        """How strong are we against them?"""
+        if self.can_beat(other):
+            return self.count * 2
+        else:
+            return self.count
+    
+    def fight(self, other):
+        """Fight another platoon - return win/draw/lose"""
+        my_power = self.power_vs(other)
+        their_count = other.count
+        
+        if my_power > their_count:
             return "win"
-        elif my_strength == enemy.size:
+        elif my_power == their_count:
             return "draw"
         else:
             return "lose"
-
+    
     def __str__(self):
-        return f"{self.unit_class}#{self.size}"
-
+        return f"{self.type}#{self.count}"
 
 class Army:
-    """
-    Represents an army, which is a list of platoons.
-    """
-
-    def __init__(self, platoons):
-        self.platoons = platoons
-
+    """Just a bunch of platoons"""
+    
+    def __init__(self, units):
+        self.units = units
+    
     @staticmethod
-    def from_input(input_line):
-
-        if not input_line:
-            raise ValueError("Input cannot be empty.")
-
-        platoons = []
-        for token in input_line.strip().split(";"):
-            token = token.strip()
-            if not token:
+    def parse(text):
+        """Turn text into an army"""
+        if not text.strip():
+            raise ValueError("Need some input!")
+            
+        units = []
+        parts = text.strip().split(";")
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
                 continue
-            if "#" not in token:
-                raise ValueError(f"Invalid platoon format: '{token}'")
-            unit_class, size_str = token.split("#")
+                
+            if "#" not in part:
+                raise ValueError(f"Bad format: {part}")
+                
+            unit_type, num = part.split("#")
+            unit_type = unit_type.strip()
+            
             try:
-                size = int(size_str.strip())
-            except ValueError:
-                raise ValueError(f"Invalid number of soldiers in: '{token}'")
-            platoons.append(Platoon(unit_class.strip(), size))
-        return Army(platoons)
-
+                num = int(num.strip())
+            except:
+                raise ValueError(f"Bad number in: {part}")
+                
+            units.append(Platoon(unit_type, num))
+            
+        return Army(units)
+    
     def __str__(self):
-        return ";".join(str(platoon) for platoon in self.platoons)
+        return ";".join(str(u) for u in self.units)
 
-
-class WarSimulator:
-    """
-    Simulates the war and finds a winning permutation if possible.
-    """
-
-    def __init__(self, own_army, enemy_army):
-        self.own_army = own_army
-        self.enemy_army = enemy_army
-
-    def find_winning_arrangement(self):
-        """
-        Returns a permutation of own army platoons that results in at least 3 wins.
-        """
-        for permutation in permutations(self.own_army.platoons):
+class War:
+    """Runs the war simulation"""
+    
+    def __init__(self, my_army, enemy_army):
+        self.mine = my_army
+        self.theirs = enemy_army
+    
+    def find_winning_setup(self):
+        """Try different orders to find one that wins"""
+        
+        # Try every possible order of our units
+        for order in permutations(self.mine.units):
             wins = 0
-            for own, enemy in zip(permutation, self.enemy_army.platoons):
-                result = own.battle_outcome(enemy)
+            
+            # Fight each battle
+            for i in range(len(order)):
+                my_unit = order[i] 
+                their_unit = self.theirs.units[i]
+                result = my_unit.fight(their_unit)
+                
                 if result == "win":
                     wins += 1
+            
+            # Need at least 3 wins
             if wins >= 3:
-                return Army(list(permutation))
+                return Army(list(order))
+        
         return None
 
-
 def main():
-    print("Welcome to the Medieval War Simulator!")
+    print("Medieval War Simulator")
+    
     try:
-        own_input = input("Enter own platoons: ").strip()
-        enemy_input = input("Enter enemy platoons: ").strip()
-
-        own_army = Army.from_input(own_input)
-        enemy_army = Army.from_input(enemy_input)
-
-        simulator = WarSimulator(own_army, enemy_army)
-        winning_army = simulator.find_winning_arrangement()
-
-        if winning_army:
-            print("One possible winning arrangement:")
-            print(winning_army)
+        my_input = input("Your army: ")
+        enemy_input = input("Enemy army: ")
+        
+        my_army = Army.parse(my_input)
+        enemy_army = Army.parse(enemy_input)
+        
+        war = War(my_army, enemy_army)
+        winner = war.find_winning_setup()
+        
+        if winner:
+            print("Found a winning:")
+            print(winner)
         else:
-            print("There is no chance of winning.")
-
+            print("No way to win :(")
+            
     except ValueError as e:
         print(f"Error: {e}")
-    except Exception as ex:
-        print(f"An unexpected error occurred: {ex}")
-
+    except Exception as e:
+        print(f"Something went wrong: {e}")
 
 if __name__ == "__main__":
     main()
